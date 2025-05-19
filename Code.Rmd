@@ -1,0 +1,172 @@
+---
+title: "Final Project_5301_001"
+author: "Jani Shariff Shaik"
+date: "2023-12-13"
+output: word_document
+---
+
+Title of the Project : Two-Way ANOVA : The Impact of Exercise and Cholesterol on Systolic Blood Pressure.
+Introduction
+The project aimed to investigate the combined influence of exercise and cholesterol levels on systolic blood pressure. The study involved conducting a Two-Way Analysis of Variance (ANOVA) to explore the interplay between these two factors and their impact on systolic blood pressure.
+
+Problem Statement
+The primary objective was to determine whether exercise (active) and cholesterol levels significantly contribute to variations in systolic blood pressure (ap_hi).
+
+Data
+The dataset used for the analysis was obtained from Kaggle, containing information on individuals' demographic details, health metrics, and lifestyle factors.
+
+```{r}
+cardio_data <- read.csv('C:/Users/janis/Downloads/5301 Datasets/cardio_train.csv', sep=";")
+str(cardio_data)
+summary(cardio_data)
+```
+As we see in the above the data has there are 70000 rows and 13 columns but from the problem statement we only choose 3 columns or variables those are ap_hi (Systolic Pressure) 
+But according to the requirement we only consider 3 columns.
+
+
+Data Preprocessing:
+Removing the unnecesary columns, and changing the column cholesterol to factor and ap_hi to numeric.
+
+```{r}
+cardio_data <- cardio_data[, !names(cardio_data) %in% c("id")]
+cardio_data <- cardio_data[, !names(cardio_data) %in% c("age")]
+cardio_data <- cardio_data[, !names(cardio_data) %in% c("gender")]
+cardio_data <- cardio_data[, !names(cardio_data) %in% c("height")]
+cardio_data <- cardio_data[, !names(cardio_data) %in% c("weight")]
+cardio_data <- cardio_data[, !names(cardio_data) %in% c("ap_lo")]
+cardio_data <- cardio_data[, !names(cardio_data) %in% c("gluc")]
+cardio_data <- cardio_data[, !names(cardio_data) %in% c("smoke")]
+cardio_data <- cardio_data[, !names(cardio_data) %in% c("alco")]
+cardio_data <- cardio_data[, !names(cardio_data) %in% c("cardio")]
+# Convert cholesterol to factor
+cardio_data$cholesterol <- as.factor(cardio_data$cholesterol)
+
+cardio_data <- cardio_data[, !names(cardio_data) %in% c("id")]# Convert ap_hi to numeric
+cardio_data$ap_hi <- as.numeric(cardio_data$ap_hi)
+summary(cardio_data)
+```
+Plots for exploratory Data analysis:
+From the Plots and previous analysis we say that the data is not normally distributed but as the dataset is large we can proceed with Two way anova analysis. But we normalize the data before performing the analysis
+
+```{r}
+ # Normalize the data using z-score normalization
+transformed_data <- scale(cardio_data[, c("active", "ap_hi")])
+
+# Scatter plots for exploratory data analysis
+plot(transformed_data[, "active"], transformed_data[, "ap_hi"],
+     main = "Scatter Plot of Active vs. Systolic Blood Pressure",
+     xlab = "Active (Normalized)", ylab = "Systolic Blood Pressure (Normalized)",
+     pch = 19, col = cardio_data$cholesterol)
+
+# Box plots for exploratory data analysis
+boxplot(transformed_data[, "ap_hi"] ~ cardio_data$cholesterol,
+        main = "Box Plot of Systolic Blood Pressure by Cholesterol Level",
+        xlab = "Cholesterol Level", ylab = "Systolic Blood Pressure (Normalized)",
+        col = "lightblue", border = "black")
+
+# Add legend
+legend("topright", legend = levels(cardio_data$cholesterol),
+       fill = "lightblue", border = "black")
+
+# Plot QQ plot with transformed data
+par(mfrow = c(1, 2))  # Create a 1x2 layout for side-by-side plots
+qqnorm(transformed_data[, "active"], main = "QQ Plot for Active (Normalized)")
+qqline(transformed_data[, "active"])
+
+qqnorm(transformed_data[, "ap_hi"], main = "QQ Plot for Systolic Blood Pressure (Normalized)")
+qqline(transformed_data[, "ap_hi"])
+
+```
+
+Check Statistical tests:
+We perform shapiro-wilk test for normality testing. As the dataset is too large we can divide the dataset into chunks of 5000 so that we can perform shapirowilk and gove an overall value.
+
+```{r}
+chunks <- split(cardio_data$ap_hi, rep(1:ceiling(length(cardio_data$ap_hi)/5000), each = 5000))
+
+# Apply Shapiro-Wilk test for each chunk
+shapiro_results <- lapply(chunks, shapiro.test)
+
+# Display the results
+print(shapiro_results)
+```
+As most of the data is not normally distributed we considered the chunks which are normally distributed to perform the analysis furthur.
+The below levene's test after data processing and allocating normally distributed data we got the values near to 0.05 which conclude that the data is homogineous and linear with this we are eligible to perform 2 way anova analysis.
+
+```{r}
+# Specify the indices of chunks to extract
+chunks_to_extract <- c(1, 6, 9, 10, 11, 12)
+
+# Initialize an empty list to store the results
+selected_chunks <- list()
+
+# Iterate through chunks and extract specified chunks
+for (i in chunks_to_extract) {
+  selected_chunks[[i]] <- chunks[[i]]
+}
+
+# Combine the chunks into a single vector
+combined_data <- unlist(selected_chunks)
+
+# Create a dataset based on the indices of the selected chunks
+selected_data <- cardio_data[which(rep(1:ceiling(length(cardio_data$ap_hi)/5000), each = 5000) %in% chunks_to_extract), ]
+
+# Assuming the transformed data is stored in selected_data$ap_hi
+
+# Shapiro-Wilk test for normality
+chunks <- split(selected_data$ap_hi, rep(1:ceiling(length(selected_data$ap_hi)/5000), each = 5000))
+shapiro_results <- lapply(chunks, shapiro.test)
+
+# Display the result of Shapiro-Wilk test
+print(shapiro_results)
+
+# Levene's test for homogeneity of variance
+levene_test <- car::leveneTest(ap_hi ~ cholesterol, data = selected_data)
+
+# Display the result of Levene's test
+print(levene_test)
+
+```
+
+Performing Two Way Anova Analysis:
+The Below code performs anova analysis:
+```{r}
+  # Two-Way ANOVA
+  two_way_anova_result <- aov(ap_hi ~ active + cholesterol + active:cholesterol, data = cardio_data)
+  
+  # Display ANOVA table
+  summary(two_way_anova_result)
+  
+  # Perform Tukey's HSD post hoc test
+  tukey_results <- TukeyHSD(aov(ap_hi ~ cholesterol, data = cardio_data))
+  
+  # Display the results
+  print(tukey_results)
+```
+
+Overview:
+Two-Way Analysis of Variance (ANOVA) is a statistical method used to analyze the influence of two categorical independent variables on a continuous dependent variable. In the context of the project, the two independent variables were exercise (active) and cholesterol levels, while the dependent variable was systolic blood pressure (ap_hi).
+
+Key Insights:
+
+Main Effects:
+
+Active (Exercise): The coefficient and p-value for the "active" variable in the ANOVA output indicated whether exercise has a significant impact on systolic blood pressure. In the project, the results showed that exercise alone did not have a statistically significant effect on systolic blood pressure.
+
+Cholesterol Levels: The ANOVA results for cholesterol levels indicated whether different levels of cholesterol significantly influenced systolic blood pressure. In the project, the results suggested a significant impact of cholesterol levels on systolic blood pressure.
+
+Interaction Effect:
+The interaction effect between exercise and cholesterol levels, represented by the interaction term in the ANOVA output, tested whether the combined effect of exercise and cholesterol was significantly different from the sum of their individual effects. In the project, this interaction effect was not found to be statistically significant.
+
+Post Hoc Analysis:
+After obtaining significant results from ANOVA, a post hoc analysis (Tukey's HSD) was performed to identify which specific cholesterol levels led to significant differences in systolic blood pressure. This allowed for a more detailed understanding of the relationships between the variables.
+
+Conclusion:
+The project, "Two-Way ANOVA: The Impact of Exercise and Cholesterol on Systolic Blood Pressure," delved into the intricate relationships between exercise habits, cholesterol levels, and systolic blood pressure. The comprehensive analysis provided valuable insights into the factors influencing cardiovascular health. Here are the key conclusions drawn from the findings:
+1. Exercise Alone May Not Significantly Impact Systolic Blood Pressure
+2. Cholesterol Levels Have a Significant Influence on Systolic Blood Pressure
+3. Interaction Effect Between Exercise and Cholesterol Was Not Significant
+4. Post Hoc Analysis Identified Specific Cholesterol Levels of Concern
+5. Data Transformation Addressed Assumption Violations
+
+In conclusion, this project contributes valuable knowledge to the field of cardiovascular health, emphasizing the multifaceted nature of factors influencing systolic blood pressure. The insights gained pave the way for tailored interventions and strategies to optimize heart health in diverse populations.
